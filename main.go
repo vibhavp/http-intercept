@@ -25,16 +25,32 @@ func init() {
 	flag.Int64Var(&timeout, "timeout", 5, "timeout in seconds")
 }
 
+func bufReadFromBytes(data []byte) *bufio.Reader {
+	return bufio.NewReader(bytes.NewReader(data))
+}
+
 func isRequest(data []byte) *http.Request {
 	for _, method := range methods {
 		if bytes.HasPrefix(data, []byte(method)) {
 			// try reading from the request
-			req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(data)))
+			req, err := http.ReadRequest(bufReadFromBytes(data))
 			if err != nil {
 				return nil
 			}
 			return req
 		}
+	}
+
+	return nil
+}
+
+func isResponse(data []byte) *http.Response {
+	if bytes.HasPrefix(data, []byte("HTTP")) {
+		resp, err := http.ReadResponse(bufReadFromBytes(data), nil)
+		if err != nil {
+			return nil
+		}
+		return resp
 	}
 
 	return nil
@@ -82,6 +98,14 @@ Version: %d.%d
 Method: %s
 Headers: %s
 `, src, tcp.SrcPort, dest, tcp.DstPort, req.ProtoMajor, req.ProtoMinor, req.Method, fmtHeader(req.Header))
+			}
+			if resp := isResponse(tcp.Payload); resp != nil {
+				log.Printf(`HTTP RESPONSE:
+From: %s:%d
+To: %s:%d
+Version: %d.%d
+Headers: %s
+`, src, tcp.SrcPort, dest, tcp.DstPort, resp.ProtoMajor, resp.ProtoMinor, fmtHeader(resp.Header))
 			}
 		}
 	}
